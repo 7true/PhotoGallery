@@ -6,6 +6,8 @@ import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import com.google.gson.Gson;
+import com.google.gson.annotations.SerializedName;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -20,6 +22,7 @@ public class FlickrFetchr {
     private static final String TAG = "FlickrFetchr";
 
     private static final String API_KEY = "e665ea0daf73e8da198ed8c8be1c1aab";
+
     public byte[] getUrlBytes(String urlSpec) throws IOException {
         URL url = new URL(urlSpec);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -50,7 +53,7 @@ public class FlickrFetchr {
         return new String(getUrlBytes(urlSpec));
     }
 
-    public List<GalleryItem> fetchItems() {
+    public List<GalleryItem> fetchItems(int page) {
 
         List<GalleryItem> items = new ArrayList<>();
 
@@ -62,38 +65,116 @@ public class FlickrFetchr {
                     .appendQueryParameter("format", "json")
                     .appendQueryParameter("nojsoncallback", "1")
                     .appendQueryParameter("extras", "url_s")
+                    .appendQueryParameter("page", page + "")
                     .build().toString();
             String jsonString = getUrlString(url);
             Log.i(TAG, "Received JSON: " + jsonString);
-            JSONObject jsonBody = new JSONObject(jsonString);
-            parseItems(items,jsonBody);
-        } catch (JSONException je) {
-            Log.e(TAG, "Failed to fetch items", je);
+            //JSONObject jsonBody = new JSONObject(jsonString);
+            parseItems(items, jsonString);
         } catch (IOException ioe) {
             Log.e(TAG, "Failed to fetch items", ioe);
         }
         return items;
     }
 
-    private void parseItems(List<GalleryItem> items, JSONObject jsonBody)
-        throws IOException, JSONException {
-        JSONObject photosJsonObject = jsonBody.getJSONObject("photos");
-        JSONArray photoJsonArray = photosJsonObject.getJSONArray("photo");
+    private void parseItems(List<GalleryItem> items, String jsonString) {
 
-        for(int i = 0; i <photoJsonArray.length(); i++) {
-            JSONObject photoJsonObject = photoJsonArray.getJSONObject(i);
+        Gson gson = new Gson();
+
+        Recent recent = gson.fromJson(jsonString, Recent.class);
+
+        List<Photo> photos = recent.getPhotos().getPhoto();
+
+        for (int i = 0; i < photos.size(); i++) {
+            Photo photo = photos.get(i);
 
             GalleryItem item = new GalleryItem();
+            item.setId(photo.getId());
+            item.setCaption(photo.getTitle());
 
-            item.setId(photoJsonObject.getString("id"));
-            item.setCaption(photoJsonObject.getString("title"));
-
-            if (!photoJsonObject.has("url_s")) {
-                continue;
+            if (photo.getUrlS() != null) {
+                item.setUrl(photo.getUrlS());
+                items.add(item);
             }
 
-            item.setUrl(photoJsonObject.getString("url_s"));
-            items.add(item);
         }
+    }
+
+    private class Recent {
+
+        @SerializedName("photos")
+        private Photos mPhotos;
+
+        public Photos getPhotos() {
+            return mPhotos;
+        }
+
+        public void setPhotos(Photos photos) {
+            mPhotos = photos;
+        }
+
+    }
+
+    private class Photos {
+
+        @SerializedName("photo")
+        private List<Photo> mPhoto;
+
+        @SerializedName("page")
+        private int mPage;
+
+        public List<Photo> getPhoto() {
+            return mPhoto;
+        }
+
+        public void setPhoto(List<Photo> photo) {
+            mPhoto = photo;
+        }
+
+        public int getPage() {
+            return mPage;
+        }
+
+        public void setPage(int page) {
+            mPage = page;
+        }
+
+    }
+
+    private class Photo {
+
+        @SerializedName("id")
+        private String mId;
+
+        @SerializedName("title")
+        private String mTitle;
+
+        @SerializedName("url_s")
+        private String mUrlS;
+
+        public String getId() {
+            return mId;
+        }
+
+        public void setId(String id) {
+            mId = id;
+        }
+
+        public String getTitle() {
+            return mTitle;
+        }
+
+        public void setTitle(String title) {
+            mTitle = title;
+        }
+
+        public String getUrlS() {
+            return mUrlS;
+        }
+
+        public void setUrlS(String urlS) {
+            mUrlS = urlS;
+        }
+
     }
 }

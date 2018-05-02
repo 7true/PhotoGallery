@@ -6,12 +6,15 @@ import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.widget.Gallery;
 import android.widget.TextView;
+import android.content.res.Resources;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -19,8 +22,17 @@ import java.util.List;
 
 public class PhotoGalleryFragment extends Fragment {
     private static final String TAG = "PhotoGalleryFragment";
-    private RecyclerView mPhotoRecyclerView;
     private List<GalleryItem> mItems = new ArrayList<>();
+    private static final int DEFAULT_COLUMN_NUM = 3;
+    private static final int ITEM_WIDTH = 100;
+
+    private RecyclerView mPhotoRecyclerView;
+    private GridLayoutManager mGridLayoutManager;
+    private List<GalleryItem> mGalleryItems;
+
+    private int mCurrentPosition = 0;
+    private int mCurrentPage = 1;
+    private int mFetchedPage = 0;
 
     public static PhotoGalleryFragment newInstance() {
         return new PhotoGalleryFragment();
@@ -30,25 +42,71 @@ public class PhotoGalleryFragment extends Fragment {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setRetainInstance(true);
-        new FetchItemsTask().execute();
+        new FetchItemsTask().execute(mCurrentPage);
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
-        View v = inflater.inflate(R.layout.fragment_photo_gallery, container,
-                false);
-        mPhotoRecyclerView = (RecyclerView) v
-                .findViewById(R.id.fragment_photo_gallery_recycler_view);
-        mPhotoRecyclerView.setLayoutManager(new GridLayoutManager
-                (getActivity(), 3));
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.fragment_photo_gallery, container, false);
+
+        mPhotoRecyclerView = (RecyclerView)
+                view.findViewById(R.id.fragment_photo_gallery_recycler_view);
+
+        mGridLayoutManager = new GridLayoutManager(getActivity(), DEFAULT_COLUMN_NUM);
+
+        mPhotoRecyclerView.setLayoutManager(mGridLayoutManager);
+
+        mPhotoRecyclerView.getViewTreeObserver().addOnGlobalLayoutListener(
+                new ViewTreeObserver.OnGlobalLayoutListener() {
+                    @Override
+                    public void onGlobalLayout() {
+
+                        int spanCount = convertPxToDp(mPhotoRecyclerView.getWidth()) / ITEM_WIDTH;
+                        mGridLayoutManager.setSpanCount(spanCount);
+                    }
+                });
+
+        mPhotoRecyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
+                super.onScrollStateChanged(recyclerView, newState);
+
+                updateCurrentPage();
+            }
+        });
+
         setupAdapter();
-        return v;
+
+        return view;
     }
+
+    private int convertPxToDp(float sizeInPx) {
+        DisplayMetrics displayMetrics = Resources.getSystem().getDisplayMetrics();
+
+        return (int) (sizeInPx / displayMetrics.density);
+    }
+    private void updateCurrentPage() {
+        int firstVisibleItemPosition = mGridLayoutManager.findFirstVisibleItemPosition();
+        int lastVisibleItemPosition = mGridLayoutManager.findLastVisibleItemPosition();
+
+        if (lastVisibleItemPosition == (mGridLayoutManager.getItemCount() - 1) &&
+                mCurrentPage == mFetchedPage ) {
+            mCurrentPosition = firstVisibleItemPosition + 3;
+            mCurrentPage++;
+            new FetchItemsTask().execute(mCurrentPage);
+        }
+    }
+
+
 
     private void setupAdapter() {
         if (isAdded()) {
-            mPhotoRecyclerView.setAdapter(new PhotoAdapter(mItems));
+            if (mGalleryItems != null) {
+                mPhotoRecyclerView.setAdapter(new PhotoAdapter(mGalleryItems));
+            } else {
+                mPhotoRecyclerView.setAdapter(null);
+            }
+            mPhotoRecyclerView.scrollToPosition(mCurrentPosition);
         }
     }
 
@@ -90,15 +148,25 @@ public class PhotoGalleryFragment extends Fragment {
         }
     }
 
-    private class FetchItemsTask extends AsyncTask<Void, Void, List<GalleryItem>> {
+    private class FetchItemsTask extends AsyncTask<Integer, Void, List<GalleryItem>> {
 
         @Override
-        protected List<GalleryItem> doInBackground(Void... params) {
-            return new FlickrFetchr().fetchItems();
+        protected List<GalleryItem> doInBackground(Integer... params) {
+            return new FlickrFetchr().fetchItems(params[0]);
         }
+
         @Override
         protected void onPostExecute(List<GalleryItem> items) {
-            mItems = items;
+            if (mGalleryItems == null) {
+                mGalleryItems = items;
+            } else {
+                if (items != null) {
+                    mGalleryItems.addAll(items);
+                }
+            }
+
+            mFetchedPage++;
+
             setupAdapter();
         }
     }
