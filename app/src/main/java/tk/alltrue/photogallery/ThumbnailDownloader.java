@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory;
 import android.os.HandlerThread;
 import android.os.Handler;
 import android.os.Message;
+import android.support.v4.util.LruCache;
 import android.util.Log;
 
 import java.io.IOException;
@@ -19,10 +20,11 @@ public class ThumbnailDownloader<T> extends HandlerThread {
     private static final int MESSAGE_DOWNLOAD = 0;
     private boolean mHasQuit = false;
 
-    private  Handler mRequestHandler;
-    private ConcurrentMap<T,String> mRequestMap = new ConcurrentHashMap<>();
+    private Handler mRequestHandler;
+    private ConcurrentMap<T, String> mRequestMap = new ConcurrentHashMap<>();
     private Handler mResponseHandler;
     private ThumbnailDownloadListener<T> mThumbnailDownloadListener;
+    private LruCache<String, Bitmap> mLruCache = new LruCache<>(1000);
 
     public interface ThumbnailDownloadListener<T> {
         void onThumbnailDownloaded(T target, Bitmap bitmap);
@@ -69,29 +71,43 @@ public class ThumbnailDownloader<T> extends HandlerThread {
     }
 
     private void handleRequest(final T target) {
-        try {
-            final String url = mRequestMap.get(target);
+//        try {
+        final String url = mRequestMap.get(target);
 
-            if (url == null) {
-                return;
-            }
-
-            byte[] bitmapBytes = new FlickrFetchr().getUrlBytes(url);
-            final Bitmap bitmap = BitmapFactory
-                    .decodeByteArray(bitmapBytes, 0, bitmapBytes.length);
-            Log.i(TAG, "Bitmap created");
-            mResponseHandler.post(new Runnable() {
-                public void run() {
-                    if (mRequestMap.get(target) != url || mHasQuit) {
-                        return;
-                    }
-
-                    mRequestMap.remove(target);
-                    mThumbnailDownloadListener.onThumbnailDownloaded(target, bitmap);
-                }
-            });
-        } catch (IOException ioe) {
-            Log.e(TAG, "Error downloading image", ioe);
+        if (url == null || url.isEmpty()) {
+            return;
         }
+        Bitmap bitmap = mLruCache.get(url);
+        if (bitmap == null) {
+            try {
+                Log.i(TAG, "Fetching bitmap for URL: " + url);
+                bitmap = new FlickrFetchr().getUrlBitmap(url);
+                mLruCache.put(url, bitmap);
+            } catch (IOException e) {
+                Log.e(TAG, "Failed to download image with URL: " + url, e);
+            }
+        } else {
+            Log.i(TAG, "Image found in cache: " + url);
+        }
+//            mRequestMap.remove(target);
+//            mThumbnailDownloadListener.onThumbnailDownloaded(target, bitmap);
+//            byte[] bitmapBytes = new FlickrFetchr().getUrlBytes(url);
+//            final Bitmap bitmap = BitmapFactory
+//                    .decodeByteArray(bitmapBytes, 0, bitmapBytes.length);
+//            Log.i(TAG, "Bitmap created");
+        final Bitmap finalBitmap = bitmap;
+        mResponseHandler.post(new Runnable() {
+            public void run() {
+                if (mRequestMap.get(target) != url || mHasQuit) {
+                    return;
+                }
+
+                mRequestMap.remove(target);
+                mThumbnailDownloadListener.onThumbnailDownloaded(target, finalBitmap);
+            }
+        });
+//        } catch (IOException ioe) {
+//            Log.e(TAG, "Error downloading image", ioe);
+//        }
     }
 }

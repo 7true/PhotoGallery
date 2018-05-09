@@ -1,5 +1,7 @@
 package tk.alltrue.photogallery;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.util.Log;
 
@@ -75,6 +77,11 @@ public class FlickrFetchr {
             Log.e(TAG, "Failed to fetch items", ioe);
         }
         return items;
+    }
+
+    public Bitmap getUrlBitmap(String urlSpec) throws IOException {
+        byte[] bytes = getUrlBytes(urlSpec);
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
     }
 
     private void parseItems(List<GalleryItem> items, String jsonString) {
