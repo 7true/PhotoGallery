@@ -3,6 +3,7 @@ package tk.alltrue.photogallery;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.sax.EndElementListener;
 import android.util.Log;
 
 import org.json.JSONArray;
@@ -23,18 +24,18 @@ public class FlickrFetchr {
 
     private static final String TAG = "FlickrFetchr";
     private static final String API_KEY = "e665ea0daf73e8da198ed8c8be1c1aab";
-//    private static final String FETCH_RECENTS_METHOD = "flickr.photos.getRecent";
-//    private static final String SEARCH_METHOD = "flickr.photos.search";
-//
-//    private static final Uri ENDPOINT = Uri
-//            .parse("https://api.flickr.com/services/rest")
-//            .buildUpon()
-//            .appendQueryParameter("api_key", API_KEY)
-//            .appendQueryParameter("format", "json")
-//            .appendQueryParameter("nojsoncallback", "1")
-//            .appendQueryParameter("extras", "url_s")
-//            //.appendQueryParameter("page", page + "")
-//            .build();
+    private static final String FETCH_RECENTS_METHOD = "flickr.photos.getRecent";
+    private static final String SEARCH_METHOD = "flickr.photos.search";
+
+    private static final Uri ENDPOINT = Uri
+            .parse("https://api.flickr.com/services/rest")
+            .buildUpon()
+            .appendQueryParameter("api_key", API_KEY)
+            .appendQueryParameter("format", "json")
+            .appendQueryParameter("nojsoncallback", "1")
+            .appendQueryParameter("extras", "url_s")
+            //.appendQueryParameter("page", page + "")
+            .build();
 
     public byte[] getUrlBytes(String urlSpec) throws IOException {
         URL url = new URL(urlSpec);
@@ -66,20 +67,20 @@ public class FlickrFetchr {
         return new String(getUrlBytes(urlSpec));
     }
 
-    public List<GalleryItem> fetchItems(int page) {
+    public List<GalleryItem> downloadGalleryItems(String url) {
 
         List<GalleryItem> items = new ArrayList<>();
 
         try {
-            String url = Uri.parse("https://api.flickr.com/services/rest")
-                    .buildUpon()
-                    .appendQueryParameter("method", "flickr.photos.getRecent")
-                    .appendQueryParameter("api_key", API_KEY)
-                    .appendQueryParameter("format", "json")
-                    .appendQueryParameter("nojsoncallback", "1")
-                    .appendQueryParameter("extras", "url_s")
-                    .appendQueryParameter("page", page + "")
-                    .build().toString();
+//            String url = Uri.parse("https://api.flickr.com/services/rest")
+//                    .buildUpon()
+//                    .appendQueryParameter("method", "flickr.photos.getRecent")
+//                    .appendQueryParameter("api_key", API_KEY)
+//                    .appendQueryParameter("format", "json")
+//                    .appendQueryParameter("nojsoncallback", "1")
+//                    .appendQueryParameter("extras", "url_s")
+//                    .appendQueryParameter("page", page + "")
+//                    .build().toString();
 
             String jsonString = getUrlString(url);
             Log.i(TAG, "Received JSON: " + jsonString);
@@ -89,6 +90,27 @@ public class FlickrFetchr {
             Log.e(TAG, "Failed to fetch items", ioe);
         }
         return items;
+    }
+
+    private String buildUrl(String method, String query, int page) {
+        Uri.Builder uriBuilder = ENDPOINT.buildUpon()
+                .appendQueryParameter("method", method)
+                .appendQueryParameter("page", page + "");                ;
+
+        if (method.equals(SEARCH_METHOD)) {
+            uriBuilder.appendQueryParameter("text", query);
+        }
+        return uriBuilder.build().toString();
+    }
+
+    public List<GalleryItem> fetchRecentPhotos(int page) {
+        String url = buildUrl(FETCH_RECENTS_METHOD, null, page);
+        return downloadGalleryItems(url);
+    }
+
+    public List<GalleryItem> searchPhotos(String query, int page) {
+        String url = buildUrl(SEARCH_METHOD, query, page);
+        return downloadGalleryItems(url);
     }
 
     public Bitmap getUrlBitmap(String urlSpec) throws IOException {
